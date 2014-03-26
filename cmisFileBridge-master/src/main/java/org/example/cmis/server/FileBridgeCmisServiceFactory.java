@@ -31,9 +31,14 @@ import java.util.Map;
 import org.apache.chemistry.opencmis.commons.impl.server.AbstractServiceFactory;
 import org.apache.chemistry.opencmis.commons.server.CallContext;
 import org.apache.chemistry.opencmis.commons.server.CmisService;
-import org.apache.chemistry.opencmis.server.support.CmisServiceWrapper;
+import org.apache.chemistry.opencmis.commons.server.MutableCallContext;
+import org.apache.chemistry.opencmis.server.support.wrapper.CallContextAwareCmisService;
+import org.apache.chemistry.opencmis.server.support.wrapper.CmisServiceWrapperManager;
+import org.apache.chemistry.opencmis.server.support.wrapper.ConformanceCmisServiceWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+
 
 /**
  * FileShare Service Factory.
@@ -63,7 +68,12 @@ public class FileBridgeCmisServiceFactory extends AbstractServiceFactory {
     private static final BigInteger DEFAULT_DEPTH_OBJECTS = BigInteger.valueOf(10);
 
     /** Each thread gets its own {@link FileBridgeCmisService} instance. */
-    private ThreadLocal<CmisServiceWrapper<FileBridgeCmisService>> threadLocalService = new ThreadLocal<CmisServiceWrapper<FileBridgeCmisService>>();
+    // old threadLocalService 
+    //private ThreadLocal<CmisServiceWrapper<FileBridgeCmisService>> threadLocalService = new ThreadLocal<CmisServiceWrapper<FileBridgeCmisService>>();
+    // new CallContextAware threadLocalService
+    private ThreadLocal<CallContextAwareCmisService> threadLocalService = new ThreadLocal<CallContextAwareCmisService>();
+    // new wrapperManager
+    private CmisServiceWrapperManager wrapperManager;
 
     private FileBridgeRepositoryManager repositoryManager;
     private FileBridgeUserManager userManager;
@@ -71,7 +81,15 @@ public class FileBridgeCmisServiceFactory extends AbstractServiceFactory {
 
     @Override
     public void init(Map<String, String> parameters) {
-        repositoryManager = new FileBridgeRepositoryManager();
+        
+    	// New for Chameleon **
+    	wrapperManager = new CmisServiceWrapperManager();
+ 	    wrapperManager.addWrappersFromServiceFactoryParameters(parameters);
+ 	    wrapperManager.addOuterWrapper(ConformanceCmisServiceWrapper.class, DEFAULT_MAX_ITEMS_TYPES,
+ 	                DEFAULT_DEPTH_TYPES, DEFAULT_MAX_ITEMS_OBJECTS, DEFAULT_DEPTH_OBJECTS);
+    	// *******
+ 	    
+    	repositoryManager = new FileBridgeRepositoryManager();
         userManager = new FileBridgeUserManager();
         typeManager = new FileBridgeTypeManager();
 
@@ -90,20 +108,25 @@ public class FileBridgeCmisServiceFactory extends AbstractServiceFactory {
         // CmisPermissionDeniedException
         userManager.authenticate(context);
 
-        // get service object for this thread
-        CmisServiceWrapper<FileBridgeCmisService> wrapperService = threadLocalService.get();
-        if (wrapperService == null) {
-            // there is no service object for this thread -> create one
-            FileBridgeCmisService fileShareService = new FileBridgeCmisService(repositoryManager);
-            wrapperService = new CmisServiceWrapper<FileBridgeCmisService>(fileShareService, DEFAULT_MAX_ITEMS_TYPES,
-                    DEFAULT_DEPTH_TYPES, DEFAULT_MAX_ITEMS_OBJECTS, DEFAULT_DEPTH_OBJECTS);
-            threadLocalService.set(wrapperService);
+	    // get service object for this thread
+        // New for Chameleon **
+        CallContextAwareCmisService service = threadLocalService.get();
+        if (service == null) {
+        	FileBridgeCmisService fileShareService = new FileBridgeCmisService(repositoryManager);
+        	// wrap it with the chain of wrappers
+    	    service = (CallContextAwareCmisService) wrapperManager.wrap(fileShareService);
+    	    threadLocalService.set(service);    
         }
-
-        // hand over the call context to the service object
-        wrapperService.getWrappedService().setCallContext(context);
-
-        return wrapperService;
+        	
+		// Stash any object into the call context and then pass it to our service 
+		// so that it can be shared with any extensions. 
+		// Here is where you would put in a reference to a native api object if needed.
+		MutableCallContext mcc = (MutableCallContext)context;	
+		mcc.put("foo","bar");        
+        service.setCallContext(context);
+        // ******
+        
+        return service;
     }
 
     // ---- helpers ----
