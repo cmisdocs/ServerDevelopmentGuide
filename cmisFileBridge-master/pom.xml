@@ -9,7 +9,7 @@
     <packaging>war</packaging>
 
     <properties>
-        <opencmis.version>1.0.0-SNAPSHOT</opencmis.version>
+        <opencmis.version>0.11.0</opencmis.version>
     </properties>
 
     <name>Your OpenCMIS Server</name>
