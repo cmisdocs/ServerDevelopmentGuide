@@ -9,9 +9,9 @@
   <url>http://maven.apache.org</url>
   
     <properties>
-        <opencmis.version>1.0.0-SNAPSHOT</opencmis.version>
+        <opencmis.version>0.11.0</opencmis.version>
 		<!-- 1.0.0-SNAPSHOT needed for bleeding edge stuff 
-		0.10.0 for stable -->
+		0.11.0 for stable -->
     </properties>
   
   <dependencies>
